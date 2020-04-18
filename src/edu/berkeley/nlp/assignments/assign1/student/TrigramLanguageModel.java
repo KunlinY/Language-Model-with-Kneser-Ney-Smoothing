@@ -17,12 +17,24 @@ public class TrigramLanguageModel implements NgramLanguageModel
 
     long[] wordCounter = new long[10];
 
+    Vocabulary vocab = new Vocabulary();
+
     public TrigramLanguageModel(Iterable<List<String>> sentenceCollection) {
         System.out.println("Building TrigramLanguageModel . . .");
         int sent = 0;
+
+        long startTime = System.nanoTime();
         for (List<String> sentence : sentenceCollection) {
             sent++;
             if (sent % 1000000 == 0) System.out.println("On sentence " + sent);
+
+            ArrayList<Integer> words = new ArrayList<>(sentence.size() +2);
+            words.add(vocab.Add(NgramLanguageModel.START));
+            for (String word: sentence) {
+                words.add(vocab.Add(word));
+            }
+            words.add(vocab.Add(NgramLanguageModel.STOP));
+
             List<String> stoppedSentence = new ArrayList<String>(sentence);
             stoppedSentence.add(0, NgramLanguageModel.START);
             stoppedSentence.add(STOP);
@@ -32,6 +44,10 @@ public class TrigramLanguageModel implements NgramLanguageModel
                 wordCounter[index]++;
             }
         }
+        long endTime = System.nanoTime();
+        long timeElapsed = endTime - startTime;
+        System.out.println("Execution time in seconds : " + timeElapsed / 1000000000);
+
         System.out.println("Done building EmpiricalUnigramLanguageModel.");
         wordCounter = CollectionUtils.copyOf(wordCounter, EnglishWordIndexer.getIndexer().size());
         total = CollectionUtils.sum(wordCounter);
@@ -43,7 +59,7 @@ public class TrigramLanguageModel implements NgramLanguageModel
 
     public double getNgramLogProbability(int[] ngram, int from, int to) {
         if (to - from != 1) {
-            System.out.println("WARNING: to - from > 1 for EmpiricalUnigramLanguageModel");
+//            System.out.println("WARNING: to - from > 1 for EmpiricalUnigramLanguageModel");
         }
         int word = ngram[from];
         return Math.log((word < 0 || word >= wordCounter.length) ? 1.0 : wordCounter[word] / (total + 1.0));
