@@ -28,37 +28,6 @@ public class Vocabulary {
         }
     }
 
-    public int Size() {
-        return length;
-    }
-
-    public int WordHash(int start, int len) {
-        int h = 0;
-        int end = start + len;
-
-        for (int i = start; i < end; i++) {
-            h += (h << 3) + buffer.charAt(i);
-        }
-
-        h *= 1103515245;
-        h &= hashMask;
-
-        return h;
-    }
-
-    public int WordHash(String word) {
-        int h = 0;
-
-        for (char c: word.toCharArray()) {
-            h += (h << 3) + c;
-        }
-
-        h *= 1103515245;
-        h &= hashMask;
-
-        return h;
-    }
-
     public int Find(String word) {
         int pos = FindPos(word);
         int index = indices.get(pos);
@@ -175,5 +144,32 @@ public class Vocabulary {
         }
 
         return sortMap;
+    }
+
+    public int WordHash(int start, int len) {
+        int h = 0;
+        int end = start + len;
+
+        for (int i = start; i < end; i++) {
+            h += (h << 3) + buffer.charAt(i);
+        }
+
+        h *= 1103515245;
+        h &= hashMask;
+
+        return h;
+    }
+
+    public int WordHash(String word) {
+        int h = 0;
+
+        for (char c: word.toCharArray()) {
+            h += (h << 3) + c;
+        }
+
+        h *= 1103515245;
+        h &= hashMask;
+
+        return h;
     }
 }
