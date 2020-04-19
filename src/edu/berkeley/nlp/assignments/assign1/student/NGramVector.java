@@ -6,7 +6,7 @@ import java.util.Comparator;
 public class NGramVector {
 
     static final int InitSize = 1 << 20;
-    static final int Invalid = -1;
+    static public final int Invalid = -1;
 
     int length = 0;
     int hashMask = InitSize - 1;
@@ -15,8 +15,6 @@ public class NGramVector {
     ArrayList<Integer> words = new ArrayList<>(InitSize);
     ArrayList<Integer> hists = new ArrayList<>(InitSize);
     ArrayList<Integer> indices = new ArrayList<>(InitSize);
-    ArrayList<Integer> wordsView = new ArrayList<>(InitSize);
-    ArrayList<Integer> histsView = new ArrayList<>(InitSize);
 
     public NGramVector() {
         ReIndex(InitSize);
@@ -72,6 +70,15 @@ public class NGramVector {
             }
         });
 
+        boolean sorted = true;
+        for (int i = 1; i < length; i++) {
+            if (sortIndices.get(i - 1) < sortIndices.get(i)) {
+                sorted = false;
+            }
+        }
+        if (sorted)
+            return new ArrayList<>();
+
         ArrayList<Integer> newWords = new ArrayList<>(words.size());
         ArrayList<Integer> newHists = new ArrayList<>(hists.size());
         nGramMap.ensureCapacity(length);
@@ -86,10 +93,6 @@ public class NGramVector {
         ReIndex(indices.size());
 
         return nGramMap;
-    }
-
-    public int size() {
-        return length;
     }
 
     public int capacity() {

@@ -9,7 +9,7 @@ import java.util.Iterator;
 
 public class Vocabulary {
 
-    static final int Invalid = -1;
+    static public final int Invalid = -1;
     static final int unkIndex = Invalid;
     static final int EndOfSentence = 0;
     static final int InitSize = 1 << 20;
