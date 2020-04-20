@@ -29,7 +29,7 @@ public class NGramVector {
         int pos = FindPos(h, w);
 
         if (indices.get(pos) == Invalid) {
-            if (length >= words.size()) {
+            if (length >= capacity - 1) {
                 Grow();
                 pos = FindPos(h, w);
             }
@@ -40,14 +40,6 @@ public class NGramVector {
         }
 
         return indices.get(pos);
-    }
-
-    public void Grow() {
-        int newCapacity = capacity * 2;
-        ReIndex(newCapacity);
-        words.ensureCapacity(newCapacity);
-        hists.ensureCapacity(newCapacity);
-        capacity = newCapacity;
     }
 
     public ArrayList<Integer> Sort(ArrayList<Integer> vocabMap, ArrayList<Integer> boNGramMap) {
@@ -112,9 +104,22 @@ public class NGramVector {
         return pos;
     }
 
+    public void Grow() {
+        int newCapacity = capacity * 2;
+        ReIndex(newCapacity);
+        words.ensureCapacity(newCapacity);
+        hists.ensureCapacity(newCapacity);
+        capacity = newCapacity;
+        System.out.println("Grow " + capacity
+                + " Current Memory Usage: " + (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()));
+    }
+
     public void ReIndex(int size) {
         indices.ensureCapacity(size);
 
+        for (int i = 0; i <  capacity; i++) {
+            indices.set(i, Invalid);
+        }
         for (int i = capacity; i < size; i++) {
             indices.add(Invalid);
         }
@@ -122,6 +127,7 @@ public class NGramVector {
         if (size > capacity) {
             capacity = size;
         }
+
         hashMask = capacity - 1;
 
         for (int i = 0; i < length; i++) {

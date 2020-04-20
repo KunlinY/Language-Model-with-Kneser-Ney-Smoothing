@@ -69,7 +69,7 @@ public class TrigramLanguageModel implements NgramLanguageModel
                 int word = words.get(i);
                 int hist = 0;
 
-                for (int j = 1; j < Math.min(i + 2, order + 1); j++) {
+                for (int j = 1; j < Math.min(i + 2, order); j++) {
                     if (word != Vocabulary.Invalid && hist != NGramVector.Invalid) {
                         int index = vectors.get(j).Add(hist, word);
 
@@ -102,36 +102,69 @@ public class TrigramLanguageModel implements NgramLanguageModel
 //            }
         }
 
-        ArrayList<Integer> vocabMap = vocab.Sort();
-        ArrayList<Integer> nGramMap = new ArrayList<>(1);
-        nGramMap.add(0);
-        ArrayList<Integer> boNgramMap;
-        for (int i = 0; i <= order; i++) {
-            boNgramMap = nGramMap;
+        System.out.println("Finish count");
+        System.out.println("Current Memory Usage: " + (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()));
 
-            nGramMap = vectors.get(i).Sort(vocabMap, boNgramMap);
-
-            if (nGramMap.size() == 0) {
-                countVectors.get(i).ensureCapacity(vectors.get(i).length);
-            } else {
-                ArrayList<Integer> sorted = new ArrayList<>(nGramMap.size());
-                for (int j = 0; j < nGramMap.size(); j++) {
-                    sorted.add(0);
-                }
-                for (int j = 0; j < nGramMap.size(); j++) {
-                    sorted.set(nGramMap.get(j), countVectors.get(i).get(j));
-                }
-                countVectors.set(i, sorted);
-            }
+        ArrayList<Integer> backoff = new ArrayList<>(vectors.get(0).length);
+        for (int i = 0; i < vectors.get(0).length; i++) {
+            backoff.add(0);
         }
+        backoffVectors.add(backoff);
+
+        backoff = new ArrayList<>(vectors.get(1).length);
+        for (int i = 0; i < vectors.get(1).length; i++) {
+            backoff.add(0);
+        }
+        backoffVectors.add(backoff);
+
+        backoff = new ArrayList<>(vectors.get(2).length);
+        for (int i = 0; i < vectors.get(2).length; i++) {
+            backoff.add(vectors.get(1).Find(0, vectors.get(2).words.get(i)));
+        }
+        backoffVectors.add(backoff);
+
+        for (int o = 3; o <= order; o++) {
+            backoff = new ArrayList<>(vectors.get(o).length);
+            for (int i = 0; i < vectors.get(o).length; i++) {
+                backoff.add(vectors.get(o - 1).Find(
+                        backoffVectors.get(o - 1).get(vectors.get(o).hists.get(i)),
+                        vectors.get(o).words.get(i)));
+            }
+            backoffVectors.add(backoff);
+        }
+
+        System.out.println("Finish backoff");
+        System.out.println("Current Memory Usage: " + (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()));
+
+//        ArrayList<Integer> vocabMap = vocab.Sort(countVectors.get(1));
+//        ArrayList<Integer> nGramMap = new ArrayList<>(1);
+//        nGramMap.add(0);
+//        ArrayList<Integer> boNgramMap;
+//        for (int i = 0; i <= order; i++) {
+//            boNgramMap = nGramMap;
+//
+//            nGramMap = vectors.get(i).Sort(vocabMap, boNgramMap);
+//
+//            if (nGramMap.size() == 0) {
+//                countVectors.get(i).ensureCapacity(vectors.get(i).length);
+//            } else {
+//                ArrayList<Integer> sorted = new ArrayList<>(nGramMap.size());
+//                for (int j = 0; j < nGramMap.size(); j++) {
+//                    sorted.add(0);
+//                }
+//                for (int j = 0; j < nGramMap.size(); j++) {
+//                    sorted.set(nGramMap.get(j), countVectors.get(i).get(j));
+//                }
+//                countVectors.set(i, sorted);
+//            }
+//        }
 
         long endTime = System.nanoTime();
         long timeElapsed = endTime - startTime;
         System.out.println("Execution time in seconds : " + timeElapsed / 1000000000);
-
         System.out.println("Done building EmpiricalUnigramLanguageModel.");
-        wordCounter = CollectionUtils.copyOf(wordCounter, EnglishWordIndexer.getIndexer().size());
-        total = CollectionUtils.sum(wordCounter);
+//        wordCounter = CollectionUtils.copyOf(wordCounter, EnglishWordIndexer.getIndexer().size());
+//        total = CollectionUtils.sum(wordCounter);
     }
 
     public int getOrder() {

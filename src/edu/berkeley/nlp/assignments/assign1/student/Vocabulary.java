@@ -104,7 +104,7 @@ public class Vocabulary {
         }
     }
 
-    public ArrayList<Integer> Sort() {
+    public ArrayList<Integer> Sort(ArrayList<Integer> cntVec) {
         ArrayList<Integer> sortMap = new ArrayList<>(length);
         ArrayList<Integer> sortIndices = new ArrayList<>(length);
 
