@@ -20,36 +20,30 @@ public class TrigramLanguageModel implements NgramLanguageModel
 
     long[] wordCounter = new long[10];
 
-    ArrayList<NGramVector> vectors = new ArrayList<>(order + 1);
+    NGramVector[] vectors = new NGramVector[order + 1];
+    int[][] countVectors = new int[order + 1][];
 
     ArrayList<ArrayList<Integer>> backoffVectors = new ArrayList<>(order + 1);
-    ArrayList<ArrayList<Integer>> countVectors = new ArrayList<>(order + 1);
-
     ArrayList<ArrayList<Integer>> probVectors = new ArrayList<>(order + 1);
     ArrayList<ArrayList<Integer>> bowVectors = new ArrayList<>(order + 1);
-
     ArrayList<ArrayList<ArrayList<Double>>> featureList = new ArrayList<>(order + 1);
 
     public TrigramLanguageModel(Iterable<List<String>> sentenceCollection) {
         System.out.println("Building TrigramLanguageModel . . .");
 
-        ArrayList<Integer> cntVec = new ArrayList<>(1);
-        cntVec.add(0);
-        countVectors.add(cntVec);
+        int[] cntVec = new int[1];
+        countVectors[0] = cntVec;
+
         for (int i = 1; i <= order; i++) {
-            cntVec = new ArrayList<>(InitSize);
-            for (int j = 0; j < InitSize; j++) {
-                cntVec.add(0);
-            }
-            countVectors.add(cntVec);
+            countVectors[i] = new int[InitSize];
         }
 
-        ArrayList<Integer> hists = new ArrayList<>(order + 1);
+        int[] hists = new int[order + 1];
         for (int i = 0; i <= order; i++) {
-            hists.add(-1);
-            vectors.add(new NGramVector());
+            hists[i] = -1;
+            vectors[i] = new NGramVector();
         }
-        vectors.get(0).Add(0, 0);
+        vectors[0].Add(0, 0);
 
         StringIndexer vocab = EnglishWordIndexer.getIndexer();
 
@@ -66,30 +60,28 @@ public class TrigramLanguageModel implements NgramLanguageModel
             }
             words.add(vocab.addAndGetIndex(NgramLanguageModel.STOP));
 
-            hists.set(1, vectors.get(1).Add(0, vocab.indexOf(NgramLanguageModel.START)));
+            hists[1] = vectors[1].Add(0, vocab.indexOf(NgramLanguageModel.START));
             for (int i = 1; i < words.size(); i++) {
                 int word = words.get(i);
                 int hist = 0;
 
                 for (int j = 1; j < Math.min(i + 2, order + 1); j++) {
                     if (word != NGramVector.Invalid && hist != NGramVector.Invalid) {
-                        int index = vectors.get(j).Add(hist, word);
+                        int index = vectors[j].Add(hist, word);
 
-                        if (index >= countVectors.get(j).size()) {
-                            int newCapacity = countVectors.get(j).size() * 2;
-                            countVectors.get(j).ensureCapacity(newCapacity);
-
-                            for (int k = countVectors.get(j).size(); k < newCapacity; k++) {
-                                countVectors.get(j).add(0);
-                            }
+                        if (index >= countVectors[j].length) {
+                            int newCapacity = countVectors[j].length * 2;
+                            cntVec = new int[newCapacity];
+                            System.arraycopy(countVectors[j], 0, cntVec, 0, countVectors[j].length);
+                            countVectors[j] = cntVec;
                         }
 
-                        countVectors.get(j).set(index, countVectors.get(j).get(index) + 1);
-                        hist = hists.get(j);
-                        hists.set(j, index);
+                        countVectors[j][index]++;
+                        hist = hists[j];
+                        hists[j] = index;
                     } else {
-                        hist = hists.get(j);
-                        hists.set(j, NGramVector.Invalid);
+                        hist = hists[j];
+                        hists[j] = NGramVector.Invalid;
                     }
                 }
             }
@@ -185,14 +177,14 @@ public class TrigramLanguageModel implements NgramLanguageModel
         int hist = 0;
         int index = 0;
         for (int i = 0; i < ngram.length; i++) {
-            if (ngram[i] < 0 || ngram[i] > vectors.get(1).length) {
+            if (ngram[i] < 0 || ngram[i] > vectors[1].length) {
                 return 0;
             }
 
-            index = vectors.get(i + 1).Find(hist, ngram[i]);
+            index = vectors[i + 1].Find(hist, ngram[i]);
             hist = index;
         }
 
-        return countVectors.get(ngram.length).get(index);
+        return countVectors[ngram.length][index];
     }
 }

@@ -1,6 +1,7 @@
 package edu.berkeley.nlp.assignments.assign1.student;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 
 public class NGramVector {
@@ -12,9 +13,9 @@ public class NGramVector {
     int hashMask = InitSize - 1;
     int capacity = 0;
 
-    ArrayList<Integer> words = new ArrayList<>(InitSize);
-    ArrayList<Integer> hists = new ArrayList<>(InitSize);
-    ArrayList<Integer> indices = new ArrayList<>(InitSize);
+    int[] words = new int[InitSize];
+    int[] hists = new int[InitSize];
+    int[] indices;
 
     public NGramVector() {
         ReIndex(InitSize);
@@ -22,82 +23,82 @@ public class NGramVector {
 
     public int Find(int h, int w) {
         int pos = FindPos(h, w);
-        return indices.get(pos);
+        if (pos >= 0) {
+            return indices[pos];
+        } else {
+            return Invalid;
+        }
     }
 
     public int Add(int h, int w) {
         int pos = FindPos(h, w);
 
-        if (indices.get(pos) == Invalid) {
+        if (indices[pos] == Invalid) {
             if (length >= capacity - 1) {
                 Grow();
                 pos = FindPos(h, w);
             }
-            indices.set(pos, length);
-            words.add(w);
-            hists.add(h);
+            indices[pos] = length;
+            words[length] = w;
+            hists[length] = h;
             length++;
         }
 
-        return indices.get(pos);
+        return indices[pos];
     }
 
-    public ArrayList<Integer> Sort(ArrayList<Integer> vocabMap, ArrayList<Integer> boNGramMap) {
-        for (int i = 0; i < length; i++) {
-            words.set(i, vocabMap.get(words.get(i)));
-            hists.set(i, boNGramMap.get(hists.get(i)));
-        }
-
-        ArrayList<Integer> sortIndices = new ArrayList<>(length);
-        ArrayList<Integer> nGramMap = new ArrayList<>(length);
-        for (int i = 0; i < length; i++) {
-            sortIndices.add(i);
-            nGramMap.add(Invalid);
-        }
-        sortIndices.sort(new Comparator<Integer>() {
-            @Override
-            public int compare(Integer i, Integer j) {
-                return hists.get(i).equals(hists.get(j))
-                       ? words.get(i).compareTo(words.get(j)) : hists.get(i).compareTo(hists.get(j));
-            }
-        });
-
-        boolean sorted = true;
-        for (int i = 1; i < length; i++) {
-            if (sortIndices.get(i - 1) < sortIndices.get(i)) {
-                sorted = false;
-            }
-        }
-        if (sorted)
-            return new ArrayList<>();
-
-        ArrayList<Integer> newWords = new ArrayList<>(words.size());
-        ArrayList<Integer> newHists = new ArrayList<>(hists.size());
-        nGramMap.ensureCapacity(length);
-        for (int i = 0; i < length; i++) {
-            newWords.add(words.get(sortIndices.get(i)));
-            newHists.add(words.get(sortIndices.get(i)));
-            nGramMap.set(sortIndices.get(i), i);
-        }
-        words = newWords;
-        hists = newHists;
-
-        ReIndex(indices.size());
-
-        return nGramMap;
-    }
-
-    public int capacity() {
-        return indices.size();
-    }
+//    public ArrayList<Integer> Sort(ArrayList<Integer> vocabMap, ArrayList<Integer> boNGramMap) {
+//        for (int i = 0; i < length; i++) {
+//            words.set(i, vocabMap.get(words.get(i)));
+//            hists.set(i, boNGramMap.get(hists.get(i)));
+//        }
+//
+//        ArrayList<Integer> sortIndices = new ArrayList<>(length);
+//        ArrayList<Integer> nGramMap = new ArrayList<>(length);
+//        for (int i = 0; i < length; i++) {
+//            sortIndices.add(i);
+//            nGramMap.add(Invalid);
+//        }
+//        sortIndices.sort(new Comparator<Integer>() {
+//            @Override
+//            public int compare(Integer i, Integer j) {
+//                return hists.get(i).equals(hists.get(j))
+//                       ? words.get(i).compareTo(words.get(j)) : hists.get(i).compareTo(hists.get(j));
+//            }
+//        });
+//
+//        boolean sorted = true;
+//        for (int i = 1; i < length; i++) {
+//            if (sortIndices.get(i - 1) < sortIndices.get(i)) {
+//                sorted = false;
+//            }
+//        }
+//        if (sorted)
+//            return new ArrayList<>();
+//
+//        ArrayList<Integer> newWords = new ArrayList<>(words.size());
+//        ArrayList<Integer> newHists = new ArrayList<>(hists.size());
+//        nGramMap.ensureCapacity(length);
+//        for (int i = 0; i < length; i++) {
+//            newWords.add(words.get(sortIndices.get(i)));
+//            newHists.add(words.get(sortIndices.get(i)));
+//            nGramMap.set(sortIndices.get(i), i);
+//        }
+//        words = newWords;
+//        hists = newHists;
+//
+//        ReIndex(indices.size());
+//
+//        return nGramMap;
+//    }
 
     public int FindPos(int h, int w) {
         int skip = 0;
         int pos = IndexHash(h, w);
         int index;
 
-        while ((index = indices.get(pos)) != Invalid
-                && !(words.get(index) == w && hists.get(index) == h)) {
+        while ((index = indices[pos]) != Invalid
+                && !(words[index] == w && hists[index] == h)) {
             pos = (pos + (++skip)) & hashMask;
         }
 
@@ -106,37 +107,37 @@ public class NGramVector {
 
     public void Grow() {
         int newCapacity = capacity * 2;
+
+        int[] newArr = new int[newCapacity];
+        System.arraycopy(words, 0, newArr, 0, capacity);
+        words = newArr;
+
+        newArr = new int[newCapacity];
+        System.arraycopy(hists, 0, newArr, 0, capacity);
+        hists = newArr;
+
         ReIndex(newCapacity);
-        words.ensureCapacity(newCapacity);
-        hists.ensureCapacity(newCapacity);
-        capacity = newCapacity;
+
         System.out.println("Grow " + capacity
                 + " Current Memory Usage: " + (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()));
     }
 
     public void ReIndex(int size) {
-        indices.ensureCapacity(size);
-
-        for (int i = 0; i <  capacity; i++) {
-            indices.set(i, Invalid);
-        }
-        for (int i = capacity; i < size; i++) {
-            indices.add(Invalid);
-        }
-
         if (size > capacity) {
             capacity = size;
         }
-
         hashMask = capacity - 1;
+
+        indices = new int[capacity];
+        Arrays.fill(indices, -1);
 
         for (int i = 0; i < length; i++) {
             int skip = 0;
-            int pos = IndexHash(hists.get(i), words.get(i));
-            while (indices.get(pos) != Invalid) {
+            int pos = IndexHash(hists[i], words[i]);
+            while (indices[pos] != Invalid) {
                 pos = (pos + (++skip)) & hashMask;
             }
-            indices.set(pos, i);
+            indices[pos] = i;
         }
     }
 
