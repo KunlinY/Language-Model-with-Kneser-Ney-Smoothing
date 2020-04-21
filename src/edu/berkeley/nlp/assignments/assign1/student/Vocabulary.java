@@ -2,6 +2,7 @@ package edu.berkeley.nlp.assignments.assign1.student;
 
 import edu.berkeley.nlp.langmodel.NgramLanguageModel;
 import edu.berkeley.nlp.util.Pair;
+import edu.berkeley.nlp.util.StringIndexer;
 
 import java.util.ArrayList;
 import java.util.Comparator;

@@ -5,6 +5,7 @@ import edu.berkeley.nlp.langmodel.EnglishWordIndexer;
 import edu.berkeley.nlp.langmodel.LanguageModelFactory;
 import edu.berkeley.nlp.langmodel.NgramLanguageModel;
 import edu.berkeley.nlp.util.CollectionUtils;
+import edu.berkeley.nlp.util.StringIndexer;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -19,7 +20,6 @@ public class TrigramLanguageModel implements NgramLanguageModel
 
     long[] wordCounter = new long[10];
 
-    Vocabulary vocab = new Vocabulary();
     ArrayList<NGramVector> vectors = new ArrayList<>(order + 1);
 
     ArrayList<ArrayList<Integer>> backoffVectors = new ArrayList<>(order + 1);
@@ -51,6 +51,8 @@ public class TrigramLanguageModel implements NgramLanguageModel
         }
         vectors.get(0).Add(0, 0);
 
+        StringIndexer vocab = EnglishWordIndexer.getIndexer();
+
         int sent = 0;
         long startTime = System.nanoTime();
         for (List<String> sentence : sentenceCollection) {
@@ -58,19 +60,19 @@ public class TrigramLanguageModel implements NgramLanguageModel
             if (sent % 1000000 == 0) System.out.println("On sentence " + sent);
 
             ArrayList<Integer> words = new ArrayList<>(sentence.size() +2);
-            words.add(vocab.Add(NgramLanguageModel.START));
+            words.add(vocab.addAndGetIndex(NgramLanguageModel.START));
             for (String word: sentence) {
-                words.add(vocab.Add(word));
+                words.add(vocab.addAndGetIndex(word));
             }
-            words.add(vocab.Add(NgramLanguageModel.STOP));
+            words.add(vocab.addAndGetIndex(NgramLanguageModel.STOP));
 
-            hists.set(1, vectors.get(1).Add(0, vocab.Find(NgramLanguageModel.START)));
+            hists.set(1, vectors.get(1).Add(0, vocab.indexOf(NgramLanguageModel.START)));
             for (int i = 1; i < words.size(); i++) {
                 int word = words.get(i);
                 int hist = 0;
 
-                for (int j = 1; j < Math.min(i + 2, order); j++) {
-                    if (word != Vocabulary.Invalid && hist != NGramVector.Invalid) {
+                for (int j = 1; j < Math.min(i + 2, order + 1); j++) {
+                    if (word != NGramVector.Invalid && hist != NGramVector.Invalid) {
                         int index = vectors.get(j).Add(hist, word);
 
                         if (index >= countVectors.get(j).size()) {
@@ -105,37 +107,35 @@ public class TrigramLanguageModel implements NgramLanguageModel
         System.out.println("Finish count");
         System.out.println("Current Memory Usage: " + (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()));
 
-        ArrayList<Integer> backoff = new ArrayList<>(vectors.get(0).length);
-        for (int i = 0; i < vectors.get(0).length; i++) {
-            backoff.add(0);
-        }
-        backoffVectors.add(backoff);
-
-        backoff = new ArrayList<>(vectors.get(1).length);
-        for (int i = 0; i < vectors.get(1).length; i++) {
-            backoff.add(0);
-        }
-        backoffVectors.add(backoff);
-
-        backoff = new ArrayList<>(vectors.get(2).length);
-        for (int i = 0; i < vectors.get(2).length; i++) {
-            backoff.add(vectors.get(1).Find(0, vectors.get(2).words.get(i)));
-        }
-        backoffVectors.add(backoff);
-
-        for (int o = 3; o <= order; o++) {
-            backoff = new ArrayList<>(vectors.get(o).length);
-            for (int i = 0; i < vectors.get(o).length; i++) {
-                backoff.add(vectors.get(o - 1).Find(
-                        backoffVectors.get(o - 1).get(vectors.get(o).hists.get(i)),
-                        vectors.get(o).words.get(i)));
-            }
-            backoffVectors.add(backoff);
-        }
-
-        System.out.println("Finish backoff");
-        System.out.println("Current Memory Usage: " + (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()));
-
+//        ArrayList<Integer> backoff = new ArrayList<>(vectors.get(0).length);
+//        for (int i = 0; i < vectors.get(0).length; i++) {
+//            backoff.add(0);
+//        }
+//        backoffVectors.add(backoff);
+//
+//        backoff = new ArrayList<>(vectors.get(1).length);
+//        for (int i = 0; i < vectors.get(1).length; i++) {
+//            backoff.add(0);
+//        }
+//        backoffVectors.add(backoff);
+//
+//        backoff = new ArrayList<>(vectors.get(2).length);
+//        for (int i = 0; i < vectors.get(2).length; i++) {
+//            backoff.add(vectors.get(1).Find(0, vectors.get(2).words.get(i)));
+//        }
+//        backoffVectors.add(backoff);
+//
+//        for (int o = 3; o <= order; o++) {
+//            backoff = new ArrayList<>(vectors.get(o).length);
+//            for (int i = 0; i < vectors.get(o).length; i++) {
+//                backoff.add(vectors.get(o - 1).Find(
+//                        backoffVectors.get(o - 1).get(vectors.get(o).hists.get(i)),
+//                        vectors.get(o).words.get(i)));
+//            }
+//            backoffVectors.add(backoff);
+//        }
+//
+//        System.out.println("Finish backoff");
 //        ArrayList<Integer> vocabMap = vocab.Sort(countVectors.get(1));
 //        ArrayList<Integer> nGramMap = new ArrayList<>(1);
 //        nGramMap.add(0);
@@ -180,9 +180,19 @@ public class TrigramLanguageModel implements NgramLanguageModel
     }
 
     public long getCount(int[] ngram) {
-        if (ngram.length > 1) return 0;
-        final int word = ngram[0];
-        if (word < 0 || word >= wordCounter.length) return 0;
-        return wordCounter[word];
+        if (ngram.length > order) return 0;
+
+        int hist = 0;
+        int index = 0;
+        for (int i = 0; i < ngram.length; i++) {
+            if (ngram[i] < 0 || ngram[i] > vectors.get(1).length) {
+                return 0;
+            }
+
+            index = vectors.get(i + 1).Find(hist, ngram[i]);
+            hist = index;
+        }
+
+        return countVectors.get(ngram.length).get(index);
     }
 }
