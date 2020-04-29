@@ -1,10 +1,7 @@
 package edu.berkeley.nlp.assignments.assign1.student;
 
-import edu.berkeley.nlp.langmodel.EmpiricalUnigramLanguageModel;
 import edu.berkeley.nlp.langmodel.EnglishWordIndexer;
-import edu.berkeley.nlp.langmodel.LanguageModelFactory;
 import edu.berkeley.nlp.langmodel.NgramLanguageModel;
-import edu.berkeley.nlp.util.CollectionUtils;
 import edu.berkeley.nlp.util.StringIndexer;
 
 import java.util.ArrayList;
@@ -21,71 +18,40 @@ public class TrigramLanguageModel implements NgramLanguageModel
     long[] wordCounter = new long[10];
 
     NGramVector[] vectors = new NGramVector[order + 1];
-    int[][] countVectors = new int[order + 1][];
+    NGramVector[] invVectors = new NGramVector[order];
+    BitPackVector[] countVectors = new BitPackVector[order + 1];
 
-    ArrayList<ArrayList<Integer>> backoffVectors = new ArrayList<>(order + 1);
-    ArrayList<ArrayList<Integer>> probVectors = new ArrayList<>(order + 1);
-    ArrayList<ArrayList<Integer>> bowVectors = new ArrayList<>(order + 1);
-    ArrayList<ArrayList<ArrayList<Double>>> featureList = new ArrayList<>(order + 1);
+    StringIndexer vocab = EnglishWordIndexer.getIndexer();
+    int[] hists = new int[order + 1];
+    int[][] D = new int[order + 1][4];
 
     public TrigramLanguageModel(Iterable<List<String>> sentenceCollection) {
         System.out.println("Building TrigramLanguageModel . . .");
 
-        int[] cntVec = new int[1];
+        BitPackVector cntVec = new BitPackVector(1);
         countVectors[0] = cntVec;
 
         for (int i = 1; i <= order; i++) {
-            countVectors[i] = new int[InitSize];
+            countVectors[i] = new BitPackVector(16);
         }
 
-        int[] hists = new int[order + 1];
-        for (int i = 0; i <= order; i++) {
+        for (int i = 1; i <= order; i++) {
             hists[i] = -1;
             vectors[i] = new NGramVector();
         }
-        vectors[0].Add(0, 0);
+//        vectors[0].Add(0, 0);
 
-        StringIndexer vocab = EnglishWordIndexer.getIndexer();
+        for (int i = 1; i < order; i++) {
+            invVectors[i] = new NGramVector();
+        }
 
         int sent = 0;
         long startTime = System.nanoTime();
         for (List<String> sentence : sentenceCollection) {
             sent++;
             if (sent % 1000000 == 0) System.out.println("On sentence " + sent);
-
-            ArrayList<Integer> words = new ArrayList<>(sentence.size() +2);
-            words.add(vocab.addAndGetIndex(NgramLanguageModel.START));
-            for (String word: sentence) {
-                words.add(vocab.addAndGetIndex(word));
-            }
-            words.add(vocab.addAndGetIndex(NgramLanguageModel.STOP));
-
-            hists[1] = vectors[1].Add(0, vocab.indexOf(NgramLanguageModel.START));
-            for (int i = 1; i < words.size(); i++) {
-                int word = words.get(i);
-                int hist = 0;
-
-                for (int j = 1; j < Math.min(i + 2, order + 1); j++) {
-                    if (word != NGramVector.Invalid && hist != NGramVector.Invalid) {
-                        int index = vectors[j].Add(hist, word);
-
-                        if (index >= countVectors[j].length) {
-                            int newCapacity = countVectors[j].length * 2;
-                            cntVec = new int[newCapacity];
-                            System.arraycopy(countVectors[j], 0, cntVec, 0, countVectors[j].length);
-                            countVectors[j] = cntVec;
-                        }
-
-                        countVectors[j][index]++;
-                        hist = hists[j];
-                        hists[j] = index;
-                    } else {
-                        hist = hists[j];
-                        hists[j] = NGramVector.Invalid;
-                    }
-                }
-            }
-
+            sentenceCount(sentence);
+//            trieCount(sentence);
 //            List<String> stoppedSentence = new ArrayList<String>(sentence);
 //            stoppedSentence.add(0, NgramLanguageModel.START);
 //            stoppedSentence.add(STOP);
@@ -99,6 +65,9 @@ public class TrigramLanguageModel implements NgramLanguageModel
         System.out.println("Finish count");
         System.out.println("Current Memory Usage: " + (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()));
 
+        for (int i = 1; i <= order; i++) {
+            vectors[i].Trim();
+        }
 //        ArrayList<Integer> backoff = new ArrayList<>(vectors.get(0).length);
 //        for (int i = 0; i < vectors.get(0).length; i++) {
 //            backoff.add(0);
@@ -151,10 +120,17 @@ public class TrigramLanguageModel implements NgramLanguageModel
 //            }
 //        }
 
+        adjustCount();
         long endTime = System.nanoTime();
         long timeElapsed = endTime - startTime;
         System.out.println("Execution time in seconds : " + timeElapsed / 1000000000);
         System.out.println("Done building EmpiricalUnigramLanguageModel.");
+
+        for (int i = 1; i <= order; i++) {
+            System.out.println("vectors " + i + " length " + vectors[i].length + " capacity " + vectors[i].capacity);
+            System.out.println("count vectors " + i + " length " + countVectors[i].size);
+        }
+
 //        wordCounter = CollectionUtils.copyOf(wordCounter, EnglishWordIndexer.getIndexer().size());
 //        total = CollectionUtils.sum(wordCounter);
     }
@@ -185,6 +161,92 @@ public class TrigramLanguageModel implements NgramLanguageModel
             hist = index;
         }
 
-        return countVectors[ngram.length][index];
+        return countVectors[ngram.length].Get(index);
+    }
+
+//    public void trieCount(List<String> sentence) {
+//        int[] words = new int[sentence.size() + 2];
+//        words[0] = vocab.addAndGetIndex(NgramLanguageModel.START);
+//
+//        for (int i = 1; i < sentence.size(); i++) {
+//            words[i] = vocab.addAndGetIndex(sentence.get(i));
+//        }
+//
+//        for (int i = 0; i < words.length; i++) {
+//            for (int j = 0; j < order && i + j < words.length; j++) {
+//                trie.Add(words, i, i + j);
+//            }
+//        }
+//    }
+
+    public void sentenceCount(List<String> sentence) {
+        ArrayList<Integer> words = new ArrayList<>(sentence.size() +2);
+        words.add(vocab.addAndGetIndex(NgramLanguageModel.START));
+        for (String word: sentence) {
+            words.add(vocab.addAndGetIndex(word));
+        }
+        words.add(vocab.addAndGetIndex(NgramLanguageModel.STOP));
+
+        hists[1] = vectors[1].Add(0, vocab.indexOf(NgramLanguageModel.START));
+        for (int i = 1; i < words.size(); i++) {
+            int word = words.get(i);
+            int hist = 0;
+
+            for (int j = 1; j < Math.min(i + 2, order + 1); j++) {
+                if (word != NGramVector.Invalid && hist != NGramVector.Invalid) {
+                    int index = vectors[j].Add(hist, word);
+                    hist = hists[j];
+                    hists[j] = index;
+//                    int old = countVectors[j].Get(index);
+//                    countVectors[j].Set(old + 1, index);
+
+                    if (j != order && i - j >= 0) {
+                        invVectors[j].Add(index, words.get(i - j));
+                    } else if (j == order) {
+                        int old = countVectors[j].Get(index);
+                        countVectors[j].Set(old + 1, index);
+                    }
+                } else {
+                    hist = hists[j];
+                    hists[j] = NGramVector.Invalid;
+                }
+            }
+        }
+    }
+
+    public void adjustCount() {
+        for (int i = 1; i < order; i++) {
+            for (int j = 0; j < invVectors[i].length; j++) {
+                int index = invVectors[i].hists.Get(j);
+                int old = countVectors[i].Get(index);
+                countVectors[i].Set(old + 1, index);
+            }
+        }
+        invVectors = null;
+
+        int[][] t = new int[order + 1][5];
+        for (int i = 1; i < order + 1; i++) {
+            for (int j = 0; j < countVectors[i].size; j++) {
+                int val = countVectors[i].Get(j);
+
+                if (val > 4 || val == 0) {
+                    continue;
+                }
+
+                t[i][val] += 1;
+            }
+        }
+
+        for (int i = 1; i < order + 1; i++) {
+            D[i][0] = 0;
+            for (int j = 1; j < 4; j++) {
+                D[i][j] = j - (j +1) * t[i][1] * t[i][j +1] / ((t[i][1] + 2 * t[i][2]) * t[i][j]);
+                System.out.println("D " + i + " " + j + " " + D[i][j]);
+            }
+        }
+    }
+
+    public void calcProb() {
+
     }
 }
