@@ -250,12 +250,13 @@ public class TrigramLanguageModel implements NgramLanguageModel
             System.out.println(i);
             pseudo[i] = new float[vectors[i].length];
             backoff[i] = new float[vectors[i].length];
-            for (int j = 0; j < vectors[i].length; j++) {
+            for (int j = 0; j < vectors[i].length;) {
                 int idx = vectors[i].indices[j];
 
-                int cnt = 0;
-                if (idx > 0)
-                    cnt = countVectors[i].Get(idx);
+                if (idx < 0)
+                    continue;
+
+                int cnt = countVectors[i].Get(idx);
 
                 float Dcnt = cnt > 3 ? D[i][3] : D[i][cnt];
                 int sum = 0;
@@ -274,6 +275,7 @@ public class TrigramLanguageModel implements NgramLanguageModel
 
                 pseudo[i][idx] = (float)1.0 * (cnt - Dcnt) / (float)sum;
                 backoff[i][idx] = (float)1.0 * wsum / (float)sum;
+                j++;
             }
         }
 
