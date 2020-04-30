@@ -9,21 +9,19 @@ import java.util.List;
 
 public class TrigramLanguageModel implements NgramLanguageModel
 {
-    static final String STOP = NgramLanguageModel.STOP;
     static final int order = 3;
     static final int InitSize = 1 << 20;
-
-    long total = 0;
-
-    long[] wordCounter = new long[10];
 
     NGramVector[] vectors = new NGramVector[order + 1];
     NGramVector[] invVectors = new NGramVector[order];
     BitPackVector[] countVectors = new BitPackVector[order + 1];
+    float[][] pseudo = new float[order + 1][];
+    float[][] backoff = new float[order + 1][];
 
     StringIndexer vocab = EnglishWordIndexer.getIndexer();
     int[] hists = new int[order + 1];
-    int[][] D = new int[order + 1][4];
+    float[][] D = new float[order + 1][4];
+    int vocabTotal = 0;
 
     public TrigramLanguageModel(Iterable<List<String>> sentenceCollection) {
         System.out.println("Building TrigramLanguageModel . . .");
@@ -39,7 +37,6 @@ public class TrigramLanguageModel implements NgramLanguageModel
             hists[i] = -1;
             vectors[i] = new NGramVector();
         }
-//        vectors[0].Add(0, 0);
 
         for (int i = 1; i < order; i++) {
             invVectors[i] = new NGramVector();
@@ -120,19 +117,19 @@ public class TrigramLanguageModel implements NgramLanguageModel
 //            }
 //        }
 
-        adjustCount();
-        long endTime = System.nanoTime();
-        long timeElapsed = endTime - startTime;
-        System.out.println("Execution time in seconds : " + timeElapsed / 1000000000);
-        System.out.println("Done building EmpiricalUnigramLanguageModel.");
+        vocabTotal = vocab.size();
 
         for (int i = 1; i <= order; i++) {
             System.out.println("vectors " + i + " length " + vectors[i].length + " capacity " + vectors[i].capacity);
             System.out.println("count vectors " + i + " length " + countVectors[i].size);
         }
 
-//        wordCounter = CollectionUtils.copyOf(wordCounter, EnglishWordIndexer.getIndexer().size());
-//        total = CollectionUtils.sum(wordCounter);
+        adjustCount();
+        calcProb();
+        long endTime = System.nanoTime();
+        long timeElapsed = endTime - startTime;
+        System.out.println("Execution time in seconds : " + timeElapsed / 1000000000);
+        System.out.println("Done building EmpiricalUnigramLanguageModel.");
     }
 
     public int getOrder() {
@@ -140,11 +137,12 @@ public class TrigramLanguageModel implements NgramLanguageModel
     }
 
     public double getNgramLogProbability(int[] ngram, int from, int to) {
-        if (to - from != 1) {
+//        if (to - from != 1) {
 //            System.out.println("WARNING: to - from > 1 for EmpiricalUnigramLanguageModel");
-        }
-        int word = ngram[from];
-        return Math.log((word < 0 || word >= wordCounter.length) ? 1.0 : wordCounter[word] / (total + 1.0));
+//        }
+//        int word = ngram[from];
+//        return Math.log((word < 0 || word >= wordCounter.length) ? 1.0 : wordCounter[word] / (total + 1.0));
+        return 0.5;
     }
 
     public long getCount(int[] ngram) {
@@ -238,15 +236,55 @@ public class TrigramLanguageModel implements NgramLanguageModel
         }
 
         for (int i = 1; i < order + 1; i++) {
-            D[i][0] = 0;
+            D[i][0] = (float) 0.0;
+            float Y = (float)(long) t[i][1] / ((long)t[i][1] + 2 * (long)t[i][2]);
             for (int j = 1; j < 4; j++) {
-                D[i][j] = j - (j +1) * t[i][1] * t[i][j +1] / ((t[i][1] + 2 * t[i][2]) * t[i][j]);
+                D[i][j] = (float)j - (float)(j +1) * Y * (float)t[i][j +1] / t[i][j];
                 System.out.println("D " + i + " " + j + " " + D[i][j]);
             }
         }
     }
 
     public void calcProb() {
+        for (int i = 2; i <= order; i++) {
+            System.out.println(i);
+            pseudo[i] = new float[vectors[i].length];
+            backoff[i] = new float[vectors[i].length];
+            for (int j = 0; j < vectors[i].length; j++) {
+                int idx = vectors[i].indices[j];
 
+                int cnt = 0;
+                if (idx > 0)
+                    cnt = countVectors[i].Get(idx);
+
+                float Dcnt = cnt > 3 ? D[i][3] : D[i][cnt];
+                int sum = 0;
+                int wsum = 0;
+                int histIdx = vectors[i].hists.Get(j);
+
+                for (int k = 0; k < vectors[i].length; k++) {
+                    int curHist = vectors[i].hists.Get(k);
+                    if (curHist == histIdx) {
+                        int ccnt = countVectors[i - 1].Get(curHist);
+                        float DDcnt = ccnt > 3 ? D[i][3] : D[i][ccnt];
+                        sum += ccnt;
+                        wsum += DDcnt * ccnt;
+                    }
+                }
+
+                pseudo[i][idx] = (float)1.0 * (cnt - Dcnt) / (float)sum;
+                backoff[i][idx] = (float)1.0 * wsum / (float)sum;
+            }
+        }
+
+        pseudo[1] = new float[vectors[1].length];
+        for (int j = 0; j < vectors[1].length; j++) {
+            int idx = vectors[1].indices[j];
+            int cnt = countVectors[1].Get(idx);
+            float Dcnt = cnt > 3 ? D[1][3] : D[1][cnt];
+            int sum = vocabTotal;
+
+            pseudo[1][idx] = (float)1.0 * (cnt - Dcnt) / sum;
+        }
     }
 }
