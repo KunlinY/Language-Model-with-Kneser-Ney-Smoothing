@@ -11,8 +11,10 @@ public class NGramVector {
     int hashMask = InitSize - 1;
     int capacity = 0;
 
-    BitPackVector words = new BitPackVector();
-    BitPackVector hists = new BitPackVector();
+//    BitPackVector words = new BitPackVector();
+//    BitPackVector hists = new BitPackVector();
+    int[] words = new int[InitSize];
+    int[] hists = new int[InitSize];
     int[] indices;
 
     public NGramVector() {
@@ -37,58 +39,13 @@ public class NGramVector {
                 pos = FindPos(h, w);
             }
             indices[pos] = length;
-            words.Add(w);
-            hists.Add(h);
+            words[length] = w;
+            hists[length] = h;
             length++;
         }
 
         return indices[pos];
     }
-
-//    public ArrayList<Integer> Sort(ArrayList<Integer> vocabMap, ArrayList<Integer> boNGramMap) {
-//        for (int i = 0; i < length; i++) {
-//            words.set(i, vocabMap.get(words.get(i)));
-//            hists.set(i, boNGramMap.get(hists.get(i)));
-//        }
-//
-//        ArrayList<Integer> sortIndices = new ArrayList<>(length);
-//        ArrayList<Integer> nGramMap = new ArrayList<>(length);
-//        for (int i = 0; i < length; i++) {
-//            sortIndices.add(i);
-//            nGramMap.add(Invalid);
-//        }
-//        sortIndices.sort(new Comparator<Integer>() {
-//            @Override
-//            public int compare(Integer i, Integer j) {
-//                return hists.get(i).equals(hists.get(j))
-//                       ? words.get(i).compareTo(words.get(j)) : hists.get(i).compareTo(hists.get(j));
-//            }
-//        });
-//
-//        boolean sorted = true;
-//        for (int i = 1; i < length; i++) {
-//            if (sortIndices.get(i - 1) < sortIndices.get(i)) {
-//                sorted = false;
-//            }
-//        }
-//        if (sorted)
-//            return new ArrayList<>();
-//
-//        ArrayList<Integer> newWords = new ArrayList<>(words.size());
-//        ArrayList<Integer> newHists = new ArrayList<>(hists.size());
-//        nGramMap.ensureCapacity(length);
-//        for (int i = 0; i < length; i++) {
-//            newWords.add(words.get(sortIndices.get(i)));
-//            newHists.add(words.get(sortIndices.get(i)));
-//            nGramMap.set(sortIndices.get(i), i);
-//        }
-//        words = newWords;
-//        hists = newHists;
-//
-//        ReIndex(indices.size());
-//
-//        return nGramMap;
-//    }
 
     public int FindPos(int h, int w) {
         int skip = 0;
@@ -96,7 +53,7 @@ public class NGramVector {
         int index;
 
         while ((index = indices[pos]) != Invalid
-                && !(words.Get(index) == w && hists.Get(index) == h)) {
+                && !(words[index] == w && hists[index] == h)) {
             pos = (pos + (++skip)) & hashMask;
         }
 
@@ -106,13 +63,13 @@ public class NGramVector {
     public void Grow() {
         int newCapacity = capacity * 2;
 
-//        int[] newArr = new int[newCapacity];
-//        System.arraycopy(words, 0, newArr, 0, capacity);
-//        words = newArr;
-//
-//        newArr = new int[newCapacity];
-//        System.arraycopy(hists, 0, newArr, 0, capacity);
-//        hists = newArr;
+        int[] newArr = new int[newCapacity];
+        System.arraycopy(words, 0, newArr, 0, capacity);
+        words = newArr;
+
+        newArr = new int[newCapacity];
+        System.arraycopy(hists, 0, newArr, 0, capacity);
+        hists = newArr;
 
         ReIndex(newCapacity);
 
@@ -121,15 +78,15 @@ public class NGramVector {
     }
 
     public void Trim() {
-        words.Trim();
-        hists.Trim();
-//        int[] newArr = new int[length];
-//        System.arraycopy(words, 0, newArr, 0, length);
-//        words = newArr;
-//
-//        newArr = new int[length];
-//        System.arraycopy(hists, 0, newArr, 0, length);
-//        hists = newArr;
+//        words.Trim();
+//        hists.Trim();
+        int[] newArr = new int[length];
+        System.arraycopy(words, 0, newArr, 0, length);
+        words = newArr;
+
+        newArr = new int[length];
+        System.arraycopy(hists, 0, newArr, 0, length);
+        hists = newArr;
     }
 
     public void ReIndex(int size) {
@@ -143,7 +100,7 @@ public class NGramVector {
 
         for (int i = 0; i < length; i++) {
             int skip = 0;
-            int pos = IndexHash(hists.Get(i), words.Get(i));
+            int pos = IndexHash(hists[i], words[i]);
             while (indices[pos] != Invalid) {
                 pos = (pos + (++skip)) & hashMask;
             }

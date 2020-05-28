@@ -1,8 +1,6 @@
 package edu.berkeley.nlp.assignments.assign1.student;
 
 
-import java.util.BitSet;
-
 public class BitPackVector {
     private static final int ADDRESS_BITS_PER_WORD = 6;
     private static final int BITS_PER_WORD = 1 << ADDRESS_BITS_PER_WORD;
@@ -60,7 +58,7 @@ public class BitPackVector {
         int intIdx = (BITS_PER_WORD - longIdx > UnitSize) ? 0 : UnitSize - BITS_PER_WORD + longIdx;
         int value = (int)(storage[from] >>> longIdx) & (UnitMask >>> (intIdx));;
 
-        if (from != to) {
+        if (from != to && to < storage.length) {
             value |= (((int)(storage[to]) & UnitMask >>> (BITS_PER_WORD - longIdx)) << (BITS_PER_WORD - longIdx));
         }
 
@@ -100,7 +98,7 @@ public class BitPackVector {
     }
 
     void Trim() {
-        int bitInUse = (int)Math.ceil(1.0 * size * UnitSize / BITS_PER_WORD);
+        int bitInUse = (int)Math.ceil(1.0 * (size + 1) * UnitSize / BITS_PER_WORD);
         long[] newStorage = new long[bitInUse];
         System.arraycopy(storage, 0, newStorage, 0, bitInUse);
         storage = newStorage;

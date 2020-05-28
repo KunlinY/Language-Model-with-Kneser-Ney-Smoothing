@@ -15,13 +15,15 @@ public class TrigramLanguageModel implements NgramLanguageModel
     NGramVector[] vectors = new NGramVector[order + 1];
     NGramVector[] invVectors = new NGramVector[order];
     BitPackVector[] countVectors = new BitPackVector[order + 1];
-    float[][] pseudo = new float[order + 1][];
-    float[][] backoff = new float[order + 1][];
+    double[][] pseudo = new double[order + 1][];
 
     StringIndexer vocab = EnglishWordIndexer.getIndexer();
     int[] hists = new int[order + 1];
-    float[][] D = new float[order + 1][4];
-    int vocabTotal = 0;
+    double[][] D = new double[order + 1][4];
+    int vocabTotal;
+
+    double unkProb;
+    int allUniCnt = 0;
 
     public TrigramLanguageModel(Iterable<List<String>> sentenceCollection) {
         System.out.println("Building TrigramLanguageModel . . .");
@@ -49,86 +51,35 @@ public class TrigramLanguageModel implements NgramLanguageModel
             if (sent % 1000000 == 0) System.out.println("On sentence " + sent);
             sentenceCount(sentence);
 //            trieCount(sentence);
-//            List<String> stoppedSentence = new ArrayList<String>(sentence);
-//            stoppedSentence.add(0, NgramLanguageModel.START);
-//            stoppedSentence.add(STOP);
-//            for (String word : stoppedSentence) {
-//                int index = EnglishWordIndexer.getIndexer().addAndGetIndex(word);
-//                if (index >= wordCounter.length) wordCounter = CollectionUtils.copyOf(wordCounter, wordCounter.length * 2);
-//                wordCounter[index]++;
-//            }
         }
 
-        System.out.println("Finish count");
-        System.out.println("Current Memory Usage: " + (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()));
+        vocabTotal = vocab.size();
+
+        adjustCount();
 
         for (int i = 1; i <= order; i++) {
             vectors[i].Trim();
+            countVectors[i].Trim();
         }
-//        ArrayList<Integer> backoff = new ArrayList<>(vectors.get(0).length);
-//        for (int i = 0; i < vectors.get(0).length; i++) {
-//            backoff.add(0);
-//        }
-//        backoffVectors.add(backoff);
-//
-//        backoff = new ArrayList<>(vectors.get(1).length);
-//        for (int i = 0; i < vectors.get(1).length; i++) {
-//            backoff.add(0);
-//        }
-//        backoffVectors.add(backoff);
-//
-//        backoff = new ArrayList<>(vectors.get(2).length);
-//        for (int i = 0; i < vectors.get(2).length; i++) {
-//            backoff.add(vectors.get(1).Find(0, vectors.get(2).words.get(i)));
-//        }
-//        backoffVectors.add(backoff);
-//
-//        for (int o = 3; o <= order; o++) {
-//            backoff = new ArrayList<>(vectors.get(o).length);
-//            for (int i = 0; i < vectors.get(o).length; i++) {
-//                backoff.add(vectors.get(o - 1).Find(
-//                        backoffVectors.get(o - 1).get(vectors.get(o).hists.get(i)),
-//                        vectors.get(o).words.get(i)));
-//            }
-//            backoffVectors.add(backoff);
-//        }
-//
-//        System.out.println("Finish backoff");
-//        ArrayList<Integer> vocabMap = vocab.Sort(countVectors.get(1));
-//        ArrayList<Integer> nGramMap = new ArrayList<>(1);
-//        nGramMap.add(0);
-//        ArrayList<Integer> boNgramMap;
-//        for (int i = 0; i <= order; i++) {
-//            boNgramMap = nGramMap;
-//
-//            nGramMap = vectors.get(i).Sort(vocabMap, boNgramMap);
-//
-//            if (nGramMap.size() == 0) {
-//                countVectors.get(i).ensureCapacity(vectors.get(i).length);
-//            } else {
-//                ArrayList<Integer> sorted = new ArrayList<>(nGramMap.size());
-//                for (int j = 0; j < nGramMap.size(); j++) {
-//                    sorted.add(0);
-//                }
-//                for (int j = 0; j < nGramMap.size(); j++) {
-//                    sorted.set(nGramMap.get(j), countVectors.get(i).get(j));
-//                }
-//                countVectors.set(i, sorted);
-//            }
-//        }
 
-        vocabTotal = vocab.size();
+        long endTime = System.nanoTime();
+        long timeElapsed = endTime - startTime;
+        System.out.println("Execution time in seconds : " + timeElapsed / 1000000000);
+
+        System.out.println("Finish count");
+        System.out.println("Current Memory Usage: " + (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()));
 
         for (int i = 1; i <= order; i++) {
             System.out.println("vectors " + i + " length " + vectors[i].length + " capacity " + vectors[i].capacity);
             System.out.println("count vectors " + i + " length " + countVectors[i].size);
         }
 
-        adjustCount();
         calcProb();
-        long endTime = System.nanoTime();
-        long timeElapsed = endTime - startTime;
+
+        endTime = System.nanoTime();
+        timeElapsed = endTime - startTime;
         System.out.println("Execution time in seconds : " + timeElapsed / 1000000000);
+        System.out.println("Current Memory Usage: " + (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()));
         System.out.println("Done building EmpiricalUnigramLanguageModel.");
     }
 
@@ -137,12 +88,59 @@ public class TrigramLanguageModel implements NgramLanguageModel
     }
 
     public double getNgramLogProbability(int[] ngram, int from, int to) {
-//        if (to - from != 1) {
-//            System.out.println("WARNING: to - from > 1 for EmpiricalUnigramLanguageModel");
+        int idx = 0;
+        for (int i = from; i < to; i++) {
+            if (idx < 0)
+                idx = 0;
+            idx = vectors[i - from + 1].Find(idx, ngram[i]);
+        }
+
+        if (idx < 0)
+            return Math.log(unkProb) * (to - from);
+
+        double score = pseudo[to - from][idx];
+        if (Double.isNaN(score))
+            return Math.log(unkProb) * (to - from);
+        else
+            return Math.log(score);
+
+//        int idx = vectors[1].Find(0, ngram[to - 1]);
+//        double score;
+//        if (idx < 0)
+//            score = 1.0 / (double)vocabTotal;
+//        else
+//            score = pseudo[1][idx] + 1.0 / (double)vocabTotal;
+//
+//        for (int i = 2; i <= to - from && i < order + 1; i++) {
+//            int pIdx = 0;
+//            int bIdx = 0;
+//
+//            for (int j = 1; j <= i; j++) {
+//                pIdx = vectors[j].Find(pIdx, ngram[to - i + j - 1]);
+//            }
+//            for (int j = 1; j < i; j++) {
+//                bIdx = vectors[j].Find(bIdx, ngram[to - i + j - 1]);
+//            }
+//
+//            double p;
+//            double back;
+//            if (pIdx < 0)
+//                p = 0.0;
+//            else
+//                p = pseudo[i][pIdx];
+//
+//            if (bIdx < 0)
+//                back = 1.0 / (double)vocabTotal;
+//            else
+//                back = backoff[i - 1][bIdx];
+//
+//            score = p + back * score;
 //        }
-//        int word = ngram[from];
-//        return Math.log((word < 0 || word >= wordCounter.length) ? 1.0 : wordCounter[word] / (total + 1.0));
-        return 0.5;
+//
+//        if (Double.isNaN(score))
+//            return Math.log(1.0 / (double)vocabTotal) * (to - from);
+//        else
+//            return Math.log(score);
     }
 
     public long getCount(int[] ngram) {
@@ -215,7 +213,7 @@ public class TrigramLanguageModel implements NgramLanguageModel
     public void adjustCount() {
         for (int i = 1; i < order; i++) {
             for (int j = 0; j < invVectors[i].length; j++) {
-                int index = invVectors[i].hists.Get(j);
+                int index = invVectors[i].hists[j];
                 int old = countVectors[i].Get(index);
                 countVectors[i].Set(old + 1, index);
             }
@@ -236,57 +234,82 @@ public class TrigramLanguageModel implements NgramLanguageModel
         }
 
         for (int i = 1; i < order + 1; i++) {
-            D[i][0] = (float) 0.0;
-            float Y = (float)(long) t[i][1] / ((long)t[i][1] + 2 * (long)t[i][2]);
+            D[i][0] = 0.0;
+            double Y = (double)(long) t[i][1] / ((long)t[i][1] + 2 * (long)t[i][2]);
             for (int j = 1; j < 4; j++) {
-                D[i][j] = (float)j - (float)(j +1) * Y * (float)t[i][j +1] / t[i][j];
+                D[i][j] = (double)j - (double)(j +1) * Y * (double)t[i][j +1] / t[i][j];
                 System.out.println("D " + i + " " + j + " " + D[i][j]);
             }
         }
     }
 
     public void calcProb() {
+        double[][] backoff = new double[order + 1][];
+        int[] dcnt = new int[4];
+        for (int i = 0; i < countVectors[1].size; i++) {
+            int cnt = countVectors[1].Get(i);
+            allUniCnt += cnt;
+            if (cnt < 3)
+                dcnt[cnt] += 1;
+            else
+                dcnt[3] += 1;
+        }
+        unkProb = 1.0 * (D[1][1] * dcnt[1] + D[1][2] * dcnt[2] + D[1][3] * dcnt[3]) / (double)(vocabTotal * allUniCnt);
+
+        pseudo[1] = new double[vectors[1].length];
+        for (int j = 0; j < vectors[1].indices.length; j++) {
+            int idx = vectors[1].indices[j];
+            if (idx < 0)
+                continue;
+
+            int cnt = countVectors[1].Get(idx);
+            double Dcnt = cnt > 3 ? D[1][3] : D[1][cnt];
+
+            pseudo[1][idx] = 1.0 * (cnt - Dcnt) / (double)allUniCnt + unkProb;
+        }
+
         for (int i = 2; i <= order; i++) {
-            System.out.println(i);
-            pseudo[i] = new float[vectors[i].length];
-            backoff[i] = new float[vectors[i].length];
-            for (int j = 0; j < vectors[i].length;) {
+            int[] sum = new int[vectors[i - 1].length];
+//            double[] wsum = new double[vectors[i - 1].length];
+            int[][] ddcnt = new int[4][vectors[i - 1].length];
+            for (int j = 0; j < vectors[i].indices.length; j++) {
+                int idx = vectors[i].indices[j];
+                if (idx < 0)
+                    continue;
+
+                int cnt = countVectors[i].Get(idx);
+                int histIdx = vectors[i].hists[idx];
+
+                sum[histIdx] += cnt;
+                if (cnt < 3)
+                    ddcnt[cnt][histIdx] += 1;
+                else
+                    ddcnt[3][histIdx] += 1;
+//                if (cnt <= 3)
+//                    wsum[histIdx] += D[i][cnt] * cnt;
+//                else
+//                    wsum[histIdx] += D[i][3] * cnt;
+            }
+
+            backoff[i - 1] = new double[vectors[i - 1].length];
+            for (int j = 0; j < vectors[i - 1].length; j++) {
+                backoff[i - 1][j] = (D[i][1] * ddcnt[1][j] + D[i][2] * ddcnt[2][j] + D[i][3] * ddcnt[3][j]) / (double)sum[j];
+//                backoff[i - 1][j] = wsum[j] / (double)sum[j];
+            }
+
+            pseudo[i] = new double[vectors[i].length];
+            for (int j = 0; j < vectors[i].indices.length; j++) {
                 int idx = vectors[i].indices[j];
 
                 if (idx < 0)
                     continue;
 
                 int cnt = countVectors[i].Get(idx);
+                double Dcnt = cnt > 3 ? D[i][3] : D[i][cnt];
+                int histIdx = vectors[i].hists[idx];
 
-                float Dcnt = cnt > 3 ? D[i][3] : D[i][cnt];
-                int sum = 0;
-                int wsum = 0;
-                int histIdx = vectors[i].hists.Get(j);
-
-                for (int k = 0; k < vectors[i].length; k++) {
-                    int curHist = vectors[i].hists.Get(k);
-                    if (curHist == histIdx) {
-                        int ccnt = countVectors[i - 1].Get(curHist);
-                        float DDcnt = ccnt > 3 ? D[i][3] : D[i][ccnt];
-                        sum += ccnt;
-                        wsum += DDcnt * ccnt;
-                    }
-                }
-
-                pseudo[i][idx] = (float)1.0 * (cnt - Dcnt) / (float)sum;
-                backoff[i][idx] = (float)1.0 * wsum / (float)sum;
-                j++;
+                pseudo[i][idx] = 1.0 * (cnt - Dcnt) / (double)sum[histIdx] + backoff[i - 1][histIdx] * pseudo[i - 1][histIdx];
             }
-        }
-
-        pseudo[1] = new float[vectors[1].length];
-        for (int j = 0; j < vectors[1].length; j++) {
-            int idx = vectors[1].indices[j];
-            int cnt = countVectors[1].Get(idx);
-            float Dcnt = cnt > 3 ? D[1][3] : D[1][cnt];
-            int sum = vocabTotal;
-
-            pseudo[1][idx] = (float)1.0 * (cnt - Dcnt) / sum;
         }
     }
 }
